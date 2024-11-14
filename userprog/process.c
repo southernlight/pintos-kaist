@@ -184,11 +184,16 @@ int process_exec(void *f_name) {
 
   /* Project 2 Argument Passing */
   argument_stack(parse, count, &_if.rsp);
+  _if.R.rdi = count;
+  _if.R.rsi = (char *)_if.rsp + 8;
+  hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
 
   /* If load failed, quit. */
-  palloc_free_page(file_name);
-  if (!success)
+
+  if (!success) {
+    palloc_free_page(file_name);
     return -1;
+  }
 
   /* Start switched process. */
   do_iret(&_if);
@@ -209,8 +214,7 @@ int process_wait(tid_t child_tid UNUSED) {
    * XXX:       to add infinite loop here before
    * XXX:       implementing the process_wait. */
 
-  for (int i = 0; i < 100000000; i++) {
-  }
+  thread_sleep(100);
   return -1;
 }
 

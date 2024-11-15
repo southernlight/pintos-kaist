@@ -421,6 +421,9 @@ static void init_thread(struct thread *t, const char *name, int priority) {
   t->nice = NICE_DEFAULT;
   t->recent_cpu = RECENT_CPU_DEFAULT;
 
+  /* Project 2 System Calls*/
+  t->exit_status = 0;
+
   list_push_back(&all_list, &t->all_elem);
 
   list_init(&t->donations);

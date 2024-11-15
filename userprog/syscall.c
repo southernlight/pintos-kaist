@@ -11,6 +11,10 @@
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
+/* Project 2 System Calls */
+void halt(void);
+void exit(int status);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -39,19 +43,75 @@ void syscall_init(void) {
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED) {
   // TODO: Your implementation goes here.
-  printf("system call!\n");
+  // printf("system call!\n");
+
+  /* Project 2 System Calls*/
+  int syscall_num = f->R.rax;
+  switch (syscall_num) {
+  case SYS_HALT:
+    halt();
+    break;
+  case SYS_EXIT:
+    exit(f->R.rdi);
+    break;
+  case SYS_FORK:
+    // f->R.rax = fork(f->R.rdi);
+    break;
+  case SYS_EXEC:
+    // f->R.rax = exec(f->R.rdi);
+    break;
+  case SYS_WAIT:
+    // f->R.rax = process_wait(f->R.rdi);
+    break;
+  case SYS_CREATE:
+    // f->R.rax = create(f->R.rdi, f->R.rsi);
+    break;
+  case SYS_REMOVE:
+    // f->R.rax = remove(f->R.rdi);
+    break;
+  case SYS_OPEN:
+    // f->R.rax = open(f->R.rdi);
+    break;
+  case SYS_FILESIZE:
+    // f->R.rax = filesize(f->R.rdi);
+    break;
+  case SYS_READ:
+    // f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+    break;
+  case SYS_WRITE:
+    break;
+  case SYS_SEEK:
+    break;
+  case SYS_TELL:
+    break;
+  case SYS_CLOSE:
+    break;
+
+  default:
+    exit(-1);
+    break;
+  }
+  // thread_exit();
+}
+
+/* Project 2 System Calls */
+void halt(void) { power_off(); }
+void exit(int status) {
+  struct thread *cur = thread_current();
+  cur->exit_status = status;
+  printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();
 }
 
 /* Project 2 User Memory Access*/
-void check_address(void *addr) {
+// void check_address(void *addr) {
 
-  if (addr == NULL)
-    exit(-1);
-  if (!is_user_vaddr(addr))
-    exit(-1);
-  /*유저 프로세스의 페이지 테이블에서 주어진 주소가 실제로 물리적 메모리에
-   매핑되어 있는지 확인*/
-  if (pml4_get_page(thread_current()->pml4, addr) == NULL)
-    exit(-1);
-}
+//   if (addr == NULL)
+//     exit(-1);
+//   if (!is_user_vaddr(addr))
+//     exit(-1);
+//   /*유저 프로세스의 페이지 테이블에서 주어진 주소가 실제로 물리적 메모리에
+//    매핑되어 있는지 확인*/
+//   if (pml4_get_page(thread_current()->pml4, addr) == NULL)
+//     exit(-1);
+// }

@@ -210,6 +210,10 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
   t->tf.cs = SEL_KCSEG;
   t->tf.eflags = FLAG_IF;
 
+  /* Project2 System Calls */
+  list_push_back(&thread_current()->child_list, &t->child_elem);
+  sema_init(&t->load_sema, 0);
+
   /* Add to run queue. */
   thread_unblock(t);
 
@@ -427,6 +431,9 @@ static void init_thread(struct thread *t, const char *name, int priority) {
   list_push_back(&all_list, &t->all_elem);
 
   list_init(&t->donations);
+
+  /* Project 2 System Calls */
+  list_init(&(t->child_list));
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

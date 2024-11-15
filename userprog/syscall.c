@@ -60,7 +60,7 @@ void syscall_handler(struct intr_frame *f UNUSED) {
     exit(f->R.rdi);
     break;
   case SYS_FORK:
-    // f->R.rax = fork(f->R.rdi, f);
+    f->R.rax = fork(f->R.rdi, f);
     break;
   case SYS_EXEC:
     f->R.rax = exec(f->R.rdi);

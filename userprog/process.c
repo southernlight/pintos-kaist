@@ -26,6 +26,8 @@ static void process_cleanup(void);
 static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
+/* Project 2 System Calls */
+struct thread *get_child_process(int pid);
 
 /* General process initializer for initd and other process. */
 static void process_init(void) { struct thread *current = thread_current(); }
@@ -74,9 +76,20 @@ static void initd(void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
   /* Clone current thread to new thread.*/
-  return thread_create(
-      name, PRI_DEFAULT, __do_fork,
-      thread_current()); // 여기서 thread_current()는 부모 스레드를 의미
+  struct thread *cur = thread_current();
+  memcpy(&cur->parent_if, if_, sizeof(struct intr_frame));
+
+  tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, cur);
+  if (pid == TID_ERROR)
+    return TID_ERROR;
+
+  /* Project 2 System Calls */
+  // 자식이 여러개 있을 수 있으나, 지금은 방금 만들어진 자식이 Load 되는 것을
+  // 기다려야 해서 방금 만들어진 자식을 찾는 함수
+  struct thread *child = get_child_process(pid);
+  sema_down(&child->load_sema);
+
+  return pid;
 }
 
 #ifndef VM
@@ -119,11 +132,15 @@ static void __do_fork(void *aux) {
   struct thread *parent = (struct thread *)aux;
   struct thread *current = thread_current();
   /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-  struct intr_frame *parent_if;
+
+  /* Project 2 System Calls */
+  struct intr_frame *parent_if = &(parent->parent_if);
   bool succ = true;
 
   /* 1. Read the cpu context to local stack. */
   memcpy(&if_, parent_if, sizeof(struct intr_frame));
+  /* Project 2 System Calls */
+  if_.R.rax = 0;
 
   /* 2. Duplicate PT */
   current->pml4 = pml4_create();
@@ -145,6 +162,10 @@ static void __do_fork(void *aux) {
    * TODO:       in include/filesys/file.h. Note that parent should not return
    * TODO:       from the fork() until this function successfully duplicates
    * TODO:       the resources of parent.*/
+
+  /* Project 2 System Calls */
+  // 파일 디스크립터 테이블의 파일 복제
+  // File System 내용을 수정해야한다.
 
   process_init();
 
@@ -505,6 +526,19 @@ void argument_stack(char **parse, int count, void **rsp) {
   // 5. 리턴 주소 push
   (*rsp) -= 8;
   **(void ***)rsp = 0;
+}
+
+struct thread *get_child_process(int pid) {
+  struct thread *cur = thread_current();
+  struct list *child_list = &(cur->child_list);
+  for (struct list_elem *e = list_begin(child_list); e != list_end(child_list);
+       e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, child_elem);
+
+    if (t->tid == pid)
+      return t;
+  }
+  return NULL;
 }
 
 #ifndef VM

@@ -119,6 +119,13 @@ struct thread {
 
   /* Project 2 System Calls */
   int exit_status;
+  struct file **fdt;
+  int next_fd;
+  struct intr_frame parent_if;
+  struct list child_list;
+  struct list_elem child_elem;
+
+  struct semaphore load_sema;
 
 #endif
 #ifdef VM

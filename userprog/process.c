@@ -74,7 +74,9 @@ static void initd(void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
   /* Clone current thread to new thread.*/
-  return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
+  return thread_create(
+      name, PRI_DEFAULT, __do_fork,
+      thread_current()); // 여기서 thread_current()는 부모 스레드를 의미
 }
 
 #ifndef VM
@@ -186,7 +188,7 @@ int process_exec(void *f_name) {
   argument_stack(parse, count, &_if.rsp);
   _if.R.rdi = count;
   _if.R.rsi = (char *)_if.rsp + 8;
-  hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
+  // hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
 
   /* If load failed, quit. */
 

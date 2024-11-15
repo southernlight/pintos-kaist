@@ -8,12 +8,17 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 
+/* Project 2 System Calls */
+#include "userprog/process.h"
+
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
 /* Project 2 System Calls */
 void halt(void);
 void exit(int status);
+int exec(const char *cmd_line);
+tid_t fork(const char *thread_name, struct intr_frame *f);
 
 /* System call.
  *
@@ -55,10 +60,10 @@ void syscall_handler(struct intr_frame *f UNUSED) {
     exit(f->R.rdi);
     break;
   case SYS_FORK:
-    // f->R.rax = fork(f->R.rdi);
+    // f->R.rax = fork(f->R.rdi, f);
     break;
   case SYS_EXEC:
-    // f->R.rax = exec(f->R.rdi);
+    f->R.rax = exec(f->R.rdi);
     break;
   case SYS_WAIT:
     // f->R.rax = process_wait(f->R.rdi);
@@ -102,16 +107,34 @@ void exit(int status) {
   printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();
 }
+int exec(const char *cmd_line) {
+  // 유저 프로그램으로부터 포인터를 받는 것이기 때문에 check를 할 필요가 있다.
+  check_address(cmd_line);
+
+  char *cmd_line_copy;
+  cmd_line_copy = palloc_get_page(0);
+  if (cmd_line_copy == NULL)
+    exit(-1);
+  strlcpy(cmd_line_copy, cmd_line, PGSIZE);
+
+  if (process_exec(cmd_line_copy) == -1)
+    exit(-1);
+}
+
+tid_t fork(const char *thread_name, struct intr_frame *f) {
+
+  return process_fork(thread_name, f);
+}
 
 /* Project 2 User Memory Access*/
-// void check_address(void *addr) {
+void check_address(void *addr) {
 
-//   if (addr == NULL)
-//     exit(-1);
-//   if (!is_user_vaddr(addr))
-//     exit(-1);
-//   /*유저 프로세스의 페이지 테이블에서 주어진 주소가 실제로 물리적 메모리에
-//    매핑되어 있는지 확인*/
-//   if (pml4_get_page(thread_current()->pml4, addr) == NULL)
-//     exit(-1);
-// }
+  if (addr == NULL)
+    exit(-1);
+  if (!is_user_vaddr(addr))
+    exit(-1);
+  /*유저 프로세스의 페이지 테이블에서 주어진 주소가 실제로 물리적 메모리에
+   매핑되어 있는지 확인*/
+  if (pml4_get_page(thread_current()->pml4, addr) == NULL)
+    exit(-1);
+}

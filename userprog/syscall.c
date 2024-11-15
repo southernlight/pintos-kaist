@@ -14,6 +14,9 @@
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
+/* Project 2 User Mermory Access */
+void check_address(void *addr);
+
 /* Project 2 System Calls */
 void halt(void);
 void exit(int status);
@@ -43,6 +46,7 @@ void syscall_init(void) {
    * mode stack. Therefore, we masked the FLAG_FL. */
   write_msr(MSR_SYSCALL_MASK,
             FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+  lock_init(&filesys_lock);
 }
 
 /* The main system call interface */

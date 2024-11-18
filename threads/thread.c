@@ -210,9 +210,14 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
   t->tf.cs = SEL_KCSEG;
   t->tf.eflags = FLAG_IF;
 
-  /* Project2 System Calls */
+/* Project2 System Calls */
+#ifdef USERPROG
   list_push_back(&thread_current()->child_list, &t->child_elem);
-  sema_init(&t->load_sema, 0);
+
+  t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+  if (t->fdt == NULL)
+    return TID_ERROR;
+#endif
 
   /* Add to run queue. */
   thread_unblock(t);
@@ -434,6 +439,11 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 
   /* Project 2 System Calls */
   list_init(&(t->child_list));
+  t->next_fd = 3; // stdin, stdout, stderr 을 위해 0,1 을 남겨두기
+
+  sema_init(&t->load_sema, 0);
+  sema_init(&t->wait_sema, 0);
+  sema_init(&t->exit_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

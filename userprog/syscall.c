@@ -9,6 +9,9 @@
 #include <syscall-nr.h>
 
 /* Project 2 System Calls */
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "threads/palloc.h"
 #include "userprog/process.h"
 
 void syscall_entry(void);
@@ -18,10 +21,20 @@ void syscall_handler(struct intr_frame *);
 void check_address(void *addr);
 
 /* Project 2 System Calls */
-void halt(void);
-void exit(int status);
-int exec(const char *cmd_line);
-tid_t fork(const char *thread_name, struct intr_frame *f);
+void halt(void);                                           // O
+void exit(int status);                                     // O
+tid_t fork(const char *thread_name, struct intr_frame *f); // O
+int exec(const char *cmd_line);                            // O
+int wait(tid_t pid);                                       // X
+bool create(const char *file, off_t initial_size);         // O
+bool remove(const char *file);                             // O
+int open(const char *file);                                // O
+int filesize(int fd);                                      // O
+int read(int fd, void *buffer, unsigned size);             // O
+int write(int fd, const void *buffer, unsigned size);      // O
+void seek(int fd, unsigned position);                      // O
+unsigned tell(int fd);                                     // O
+void close(int fd);                                        // O
 
 /* System call.
  *
@@ -70,30 +83,36 @@ void syscall_handler(struct intr_frame *f UNUSED) {
     f->R.rax = exec(f->R.rdi);
     break;
   case SYS_WAIT:
-    // f->R.rax = process_wait(f->R.rdi);
+    f->R.rax = wait(f->R.rdi);
     break;
+
+  /* 아래부터는 File System 부분 시스템 콜 */
   case SYS_CREATE:
-    // f->R.rax = create(f->R.rdi, f->R.rsi);
+    f->R.rax = create(f->R.rdi, f->R.rsi);
     break;
   case SYS_REMOVE:
-    // f->R.rax = remove(f->R.rdi);
+    f->R.rax = remove(f->R.rdi);
     break;
   case SYS_OPEN:
-    // f->R.rax = open(f->R.rdi);
+    f->R.rax = open(f->R.rdi);
     break;
   case SYS_FILESIZE:
-    // f->R.rax = filesize(f->R.rdi);
+    f->R.rax = filesize(f->R.rdi);
     break;
   case SYS_READ:
-    // f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+    f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
     break;
   case SYS_WRITE:
+    f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
     break;
   case SYS_SEEK:
+    seek(f->R.rdi, f->R.rsi);
     break;
   case SYS_TELL:
+    f->R.rax = tell(f->R.rdi);
     break;
   case SYS_CLOSE:
+    close(f->R.rdi);
     break;
 
   default:
@@ -105,24 +124,12 @@ void syscall_handler(struct intr_frame *f UNUSED) {
 
 /* Project 2 System Calls */
 void halt(void) { power_off(); }
+
 void exit(int status) {
   struct thread *cur = thread_current();
   cur->exit_status = status;
   printf("%s: exit(%d)\n", cur->name, status);
   thread_exit();
-}
-int exec(const char *cmd_line) {
-  // 유저 프로그램으로부터 포인터를 받는 것이기 때문에 check를 할 필요가 있다.
-  check_address(cmd_line);
-
-  char *cmd_line_copy;
-  cmd_line_copy = palloc_get_page(0);
-  if (cmd_line_copy == NULL)
-    exit(-1);
-  strlcpy(cmd_line_copy, cmd_line, PGSIZE);
-
-  if (process_exec(cmd_line_copy) == -1)
-    exit(-1);
 }
 
 tid_t fork(const char *thread_name, struct intr_frame *f) {
@@ -130,9 +137,130 @@ tid_t fork(const char *thread_name, struct intr_frame *f) {
   return process_fork(thread_name, f);
 }
 
+int exec(const char *cmd_line) {
+  // 유저 프로그램으로부터 포인터를 받는 것이기 때문에 check를 할 필요가 있다.
+  check_address(cmd_line);
+
+  char *cmd_line_copy;
+  cmd_line_copy = palloc_get_page(0);
+  if (cmd_line_copy == NULL) {
+    exit(-1);
+  }
+  strlcpy(cmd_line_copy, cmd_line, PGSIZE);
+
+  if (process_exec(cmd_line_copy) == -1) {
+    exit(-1);
+  }
+}
+
+int wait(tid_t pid) { return process_wait(pid); }
+
+// File system 관련 함수
+bool create(const char *file, off_t initial_size) {
+  check_address(file);
+  return filesys_create(file, initial_size);
+}
+
+bool remove(const char *file) {
+  check_address(file);
+  return filesys_remove(file);
+}
+
+int open(const char *file) {
+  check_address(file);
+  struct file *open_file = filesys_open(file);
+  if (open_file == NULL) {
+    return -1;
+  }
+  int fd = process_add_file(open_file);
+  if (fd == -1) {
+    file_close(file);
+  }
+  return fd;
+}
+
+int filesize(int fd) {
+  struct file *open_file = process_get_file(fd);
+  if (open_file == NULL)
+    return -1;
+  return file_length(open_file);
+}
+
+int read(int fd, void *buffer, unsigned size) {
+  check_address(buffer);
+
+  char *buf = (char *)buffer;
+  int bytes = 0;
+  lock_acquire(&filesys_lock);
+
+  if (fd == 0) {
+    for (int i = 0; i < size; i++) {
+      buf[i] = input_getc();
+      bytes++;
+    }
+    lock_release(&filesys_lock);
+  } else if (fd < 2) {
+    lock_release(&filesys_lock);
+    return -1;
+  } else {
+    struct file *file = process_get_file(fd);
+    if (file == NULL) {
+      lock_release(&filesys_lock);
+      return -1;
+    }
+    bytes = file_read(file, buf, size);
+    lock_release(&filesys_lock);
+  }
+
+  return bytes;
+}
+
+int write(int fd, const void *buffer, unsigned size) {
+  check_address(buffer);
+  int bytes = 0;
+
+  if (fd == 1) {
+    putbuf(buffer, size);
+    bytes = size;
+  } else if (fd < 2) {
+    return -1;
+  } else {
+    struct file *file = process_get_file(fd);
+    if (file == NULL) {
+      return -1;
+    }
+    lock_acquire(&filesys_lock);
+    bytes = file_write(file, buffer, size);
+    lock_release(&filesys_lock);
+    return bytes;
+  }
+}
+
+void seek(int fd, unsigned position) {
+  struct file *file = process_get_file(fd);
+  if (file == NULL)
+    return;
+  file_seek(file, position);
+}
+
+unsigned tell(int fd) {
+  struct file *file = process_get_file(fd);
+  if (file == NULL)
+    return;
+  return file_tell(file);
+}
+
+void close(int fd) {
+  struct file *file = process_get_file(fd);
+  if (file == NULL)
+    return;
+  file_close(file);
+  // 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+  process_close_file(fd);
+}
+
 /* Project 2 User Memory Access*/
 void check_address(void *addr) {
-
   if (addr == NULL)
     exit(-1);
   if (!is_user_vaddr(addr))

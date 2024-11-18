@@ -4,6 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+
+/* Project 2 System Calls */
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -34,6 +37,10 @@ typedef int tid_t;
 
 /* Project 2 Argument Passing */
 #define USERPROG
+
+/* Project 2 System Calls */
+#define FDT_PAGES 2 // 2 페이지가 파일 디스크립터를 위해 할당
+#define FDT_COUNT_LIMIT 128
 
 /* A kernel thread or user process.
  *
@@ -126,6 +133,10 @@ struct thread {
   struct list_elem child_elem;
 
   struct semaphore load_sema;
+  struct semaphore wait_sema;
+  struct semaphore exit_sema;
+
+  struct file *running;
 
 #endif
 #ifdef VM

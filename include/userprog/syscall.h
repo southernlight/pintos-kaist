@@ -6,5 +6,6 @@ void syscall_init(void);
 
 /* Project 2 System Calls */
 struct lock filesys_lock;
+void close(int fd);
 
 #endif /* userprog/syscall.h */

@@ -11,6 +11,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/gdt.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -103,21 +104,30 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
   bool writable;
 
   /* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
+  if (is_kernel_vaddr(va))
+    return true;
   /* 2. Resolve VA from the parent's page map level 4. */
   parent_page = pml4_get_page(parent->pml4, va);
+  if (parent_page == NULL)
+    return false;
 
   /* 3. TODO: Allocate new PAL_USER page for the child and set result to
    *    TODO: NEWPAGE. */
+  newpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (newpage == NULL)
+    return false;
 
   /* 4. TODO: Duplicate parent's page to the new page and
    *    TODO: check whether parent's page is writable or not (set WRITABLE
    *    TODO: according to the result). */
+  memcpy(newpage, parent_page, PGSIZE);
+  writable = is_writable(pte);
 
   /* 5. Add new page to child's page table at address VA with WRITABLE
    *    permission. */
   if (!pml4_set_page(current->pml4, va, newpage, writable)) {
     /* 6. TODO: if fail to insert page, do error handling. */
+    return false;
   }
   return true;
 }
@@ -164,8 +174,21 @@ static void __do_fork(void *aux) {
    * TODO:       the resources of parent.*/
 
   /* Project 2 System Calls */
-  // 파일 디스크립터 테이블의 파일 복제
-  // File System 내용을 수정해야한다.
+  // FDT 복사
+
+  for (int i = 0; i < FDT_COUNT_LIMIT; i++) {
+    struct file *file = parent->fdt[i];
+    if (file == NULL) {
+      continue;
+    }
+    if (i > 2) {
+      file = file_duplicate(file);
+    }
+    current->fdt[i] = file;
+  }
+  current->next_fd = parent->next_fd;
+  // 부모의 리소스를 복제 완료했으니 sema_up
+  sema_up(&current->load_sema);
 
   process_init();
 
@@ -217,6 +240,7 @@ int process_exec(void *f_name) {
     palloc_free_page(file_name);
     return -1;
   }
+  palloc_free_page(file_name);
 
   /* Start switched process. */
   do_iret(&_if);
@@ -237,8 +261,16 @@ int process_wait(tid_t child_tid UNUSED) {
    * XXX:       to add infinite loop here before
    * XXX:       implementing the process_wait. */
 
-  thread_sleep(100);
-  return -1;
+  /* Project 2 System Calls */
+  struct thread *child = get_child_process(child_tid);
+  if (child == NULL)
+    return -1;
+
+  sema_down(&child->wait_sema);
+  list_remove(&child->child_elem);
+  sema_up(&child->exit_sema);
+
+  return child->exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -249,7 +281,17 @@ void process_exit(void) {
    * TODO: project2/process_termination.html).
    * TODO: We recommend you to implement process resource cleanup here. */
 
+  /* Project 2 System Calls */
+
+  for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+    close(i);
+
+  palloc_free_page(curr->fdt);
+  file_close(curr->running);
   process_cleanup();
+
+  sema_up(&curr->wait_sema);
+  sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */
@@ -434,6 +476,10 @@ static bool load(const char *file_name, struct intr_frame *if_) {
     }
   }
 
+  /* Project 2 System Calls */
+  t->running = file;
+  file_deny_write(file);
+
   /* Set up stack. */
   if (!setup_stack(if_))
     goto done;
@@ -448,7 +494,9 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+
+  /* Project 2 System Calls */
+  // file_close(file);
   return success;
 }
 
@@ -539,6 +587,38 @@ struct thread *get_child_process(int pid) {
       return t;
   }
   return NULL;
+}
+
+/* Project 2 System Calls */
+int process_add_file(struct file *f) {
+  struct thread *curr = thread_current();
+  struct file **fdt = curr->fdt;
+
+  while (curr->next_fd < FDT_COUNT_LIMIT && fdt[curr->next_fd])
+    curr->next_fd++;
+
+  if (curr->next_fd >= FDT_COUNT_LIMIT)
+    return -1;
+  fdt[curr->next_fd] = f;
+
+  return curr->next_fd;
+}
+
+struct file *process_get_file(int fd) {
+  struct thread *curr = thread_current();
+  struct file **fdt = curr->fdt;
+
+  if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+    return NULL;
+  return fdt[fd];
+}
+
+void process_close_file(int fd) {
+  struct thread *curr = thread_current();
+  struct file **fdt = curr->fdt;
+  if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+    return NULL;
+  fdt[fd] = NULL;
 }
 
 #ifndef VM

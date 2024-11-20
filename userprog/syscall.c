@@ -134,6 +134,7 @@ void exit(int status) {
 
 tid_t fork(const char *thread_name, struct intr_frame *f) {
 
+  // printf("fork is called\n");
   return process_fork(thread_name, f);
 }
 

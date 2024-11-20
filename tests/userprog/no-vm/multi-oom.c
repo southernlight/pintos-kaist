@@ -97,7 +97,7 @@ static int NO_INLINE consume_some_resources_and_die(void) {
 }
 
 int make_children(void) {
-  // printf("make_children is called\n");
+  // printf("1\n");
   int i = 0;
   int pid;
   char child_name[128];
@@ -108,16 +108,19 @@ int make_children(void) {
       if (pid > 0 && wait(pid) != -1) {
         fail("crashed child should return -1.");
       } else if (pid == 0) {
+        // printf("2\n");
         consume_some_resources_and_die();
         fail("Unreachable");
       }
     }
     // printf("helloworld\n");
     snprintf(child_name, sizeof child_name, "%s_%d_%s", "child", i, "O");
+    // printf("%d\n", 444);
     pid = fork(child_name);
     if (pid < 0) {
       exit(i);
     } else if (pid == 0) {
+      // printf("3\n");
       consume_some_resources();
     } else {
       break;

@@ -138,6 +138,7 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
 static void __do_fork(void *aux) {
+  // printf("do fork is called!\n");
   struct intr_frame if_;
   struct thread *parent = (struct thread *)aux;
   struct thread *current = thread_current();
@@ -178,6 +179,7 @@ static void __do_fork(void *aux) {
 
   for (int i = 0; i < FDT_COUNT_LIMIT; i++) {
     struct file *file = parent->fdt[i];
+    // printf("%p\n", file);
     if (file == NULL) {
       continue;
     }
@@ -197,6 +199,7 @@ static void __do_fork(void *aux) {
     do_iret(&if_);
 error:
   // sema_up(&current->load_sema);
+  // printf("Error occur!!\n");
   thread_exit();
 }
 

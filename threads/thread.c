@@ -217,14 +217,13 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
   t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
   if (t->fdt == NULL)
     return TID_ERROR;
-  t->fdt[0] = 1;
-  t->fdt[1] = 2;
-  t->fdt[2] = 3;
+    // t->fdt[0] = 1;
+    // t->fdt[1] = 2;
+    // t->fdt[2] = 3;
 #endif
 
   /* Add to run queue. */
   thread_unblock(t);
-
   preemption();
 
   return tid;

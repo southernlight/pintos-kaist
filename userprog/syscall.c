@@ -25,7 +25,7 @@ void halt(void);                                           // O
 void exit(int status);                                     // O
 tid_t fork(const char *thread_name, struct intr_frame *f); // O
 int exec(const char *cmd_line);                            // O
-int wait(tid_t pid);                                       // X
+int wait(tid_t pid);                                       // O
 bool create(const char *file, off_t initial_size);         // O
 bool remove(const char *file);                             // O
 int open(const char *file);                                // O
@@ -166,16 +166,18 @@ bool remove(const char *file) {
   return filesys_remove(file);
 }
 
-int open(const char *file) {
-  check_address(file);
-  struct file *open_file = filesys_open(file);
-  if (open_file == NULL) {
+int open(const char *file_name) {
+  check_address(file_name);
+  lock_acquire(&filesys_lock);
+  struct file *file = filesys_open(file_name);
+  if (file == NULL) {
+    lock_release(&filesys_lock);
     return -1;
   }
-  int fd = process_add_file(open_file);
-  if (fd == -1) {
+  int fd = process_add_file(file);
+  if (fd == -1)
     file_close(file);
-  }
+  lock_release(&filesys_lock);
   return fd;
 }
 

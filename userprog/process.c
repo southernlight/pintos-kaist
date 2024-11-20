@@ -181,7 +181,7 @@ static void __do_fork(void *aux) {
     if (file == NULL) {
       continue;
     }
-    if (i > 2) {
+    if (file > 2) {
       file = file_duplicate(file);
     }
     current->fdt[i] = file;
@@ -196,6 +196,7 @@ static void __do_fork(void *aux) {
   if (succ)
     do_iret(&if_);
 error:
+  // sema_up(&current->load_sema);
   thread_exit();
 }
 

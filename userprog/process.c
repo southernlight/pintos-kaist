@@ -90,6 +90,17 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
   struct thread *child = get_child_process(pid);
   sema_down(&child->load_sema);
 
+  if (child->exit_status == -2) {
+    // 자식이 종료되었으므로 자식 리스트에서 제거한다.
+    // 이거 넣으면 간헐적으로 실패함 (syn-read)
+    // list_remove(&child->child_elem);
+    // 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을
+    // 보낸다.
+    sema_up(&child->exit_sema);
+    // 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
+    return TID_ERROR;
+  }
+
   return pid;
 }
 
@@ -198,9 +209,10 @@ static void __do_fork(void *aux) {
   if (succ)
     do_iret(&if_);
 error:
-  // sema_up(&current->load_sema);
+  sema_up(&current->load_sema);
   // printf("Error occur!!\n");
-  thread_exit();
+  // thread_exit();
+  exit(-2);
 }
 
 /* Switch the current execution context to the f_name.
@@ -287,10 +299,13 @@ void process_exit(void) {
 
   /* Project 2 System Calls */
 
-  for (int i = 2; i < FDT_COUNT_LIMIT; i++)
-    close(i);
+  for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
+    if (curr->fdt[i] != NULL) {
+      close(i);
+    }
+  }
 
-  palloc_free_page(curr->fdt);
+  palloc_free_multiple(curr->fdt, FDT_PAGES);
   file_close(curr->running);
   process_cleanup();
 

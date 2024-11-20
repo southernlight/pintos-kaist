@@ -108,7 +108,7 @@ int make_children(void) {
       if (pid > 0 && wait(pid) != -1) {
         fail("crashed child should return -1.");
       } else if (pid == 0) {
-        // printf("2\n");
+        // printf("1\n");
         consume_some_resources_and_die();
         fail("Unreachable");
       }
